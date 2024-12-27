@@ -8,6 +8,6 @@ namespace ClassLibrary
 {
     public interface IActionDispatcher
     {
-        void Dispatch(string actionName);
+        void Dispatch(string actionName, params string[] args);
     }
 }

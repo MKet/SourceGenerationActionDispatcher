@@ -10,12 +10,10 @@ namespace ClassLibrary.Generator;
 [Generator(LanguageNames.CSharp)]
 public class MyActionDispatcherGenerator : IIncrementalGenerator
 {
-    private const string AttributeName = "MyAction";
     private const string FullyQualifiedMetadataName = "ClassLibrary.MyActionAttribute";
 
     public void Initialize(IncrementalGeneratorInitializationContext context)
     {
-        //System.Diagnostics.Debugger.Launch();
         // Create a provider for methods with the [MyAction] attribute
         var methodsWithMyAction = context.SyntaxProvider.ForAttributeWithMetadataName(
                 fullyQualifiedMetadataName: FullyQualifiedMetadataName,
@@ -29,7 +27,7 @@ public class MyActionDispatcherGenerator : IIncrementalGenerator
         context.RegisterSourceOutput(methodsWithMyAction, GenerateDispatcher);
     }
 
-    private static (string? ClassName, string? MethodName)? GetMethodWithMyActionAttribute(GeneratorAttributeSyntaxContext context)
+    private static (string? ClassName, string? MethodName, ImmutableArray<IParameterSymbol> Parameters)? GetMethodWithMyActionAttribute(GeneratorAttributeSyntaxContext context)
     {
         var methodSyntax = (MethodDeclarationSyntax)context.TargetNode;
         var semanticModel = context.SemanticModel;
@@ -38,27 +36,16 @@ public class MyActionDispatcherGenerator : IIncrementalGenerator
         var classDeclaration = methodSyntax.Parent as ClassDeclarationSyntax;
         var className = classDeclaration?.Identifier.Text;
 
-        // Get the method name
-        var methodName = methodSyntax.Identifier.Text;
-
-        // Check for the [MyAction] attribute
-        var attributes = methodSyntax.AttributeLists
-            .SelectMany(attrList => attrList.Attributes)
-            .Select(attr => semanticModel.GetSymbolInfo(attr).Symbol)
-            .Cast<IMethodSymbol>();
-
-        var myActionAttribute = attributes
-            .FirstOrDefault(attr => attr.ContainingType.Name == $"{AttributeName}Attribute");
-
-        if (myActionAttribute != null)
+        // Get the method symbol
+        if (semanticModel.GetDeclaredSymbol(methodSyntax) is IMethodSymbol methodSymbol)
         {
-            return (className, methodName);
+            return (className, methodSymbol.Name, methodSymbol.Parameters);
         }
 
         return null;
     }
 
-    private static void GenerateDispatcher(SourceProductionContext context, ImmutableArray<(string? ClassName, string? MethodName)?> methods)
+    private static void GenerateDispatcher(SourceProductionContext context, ImmutableArray<(string? ClassName, string? MethodName, ImmutableArray<IParameterSymbol> Parameters)?> methods)
     {
         // Filter null values
         var validMethods = methods
@@ -74,6 +61,7 @@ public class MyActionDispatcherGenerator : IIncrementalGenerator
 
         sourceBuilder.AppendLine("""
             using System;
+            using System.Globalization;
 
             namespace ClassLibrary;
 
@@ -87,16 +75,51 @@ public class MyActionDispatcherGenerator : IIncrementalGenerator
             */
             public class MyGeneratedActionDispatcher : IActionDispatcher
             {
-                public void Dispatch(string actionName)
+                public void Dispatch(string actionName, params string[] args)
                 {
                     switch (actionName)
                     {
             """);
 
-        foreach (var (className, methodName) in validMethods)
+        foreach (var (className, methodName, parameters) in validMethods)
         {
             sourceBuilder.AppendLine($"            case \"{methodName}\":");
-            sourceBuilder.AppendLine($"                {className}.{methodName}();");
+
+            if (parameters.Length > 0)
+            {
+                sourceBuilder.AppendLine("                if (args.Length != " + parameters.Length + ")");
+                sourceBuilder.AppendLine($"                    throw new ArgumentException($\"Expected {parameters.Length} arguments for {methodName}, but got {{args.Length}}.\");");
+
+                var parsedArgs = new StringBuilder();
+                for (int i = 0; i < parameters.Length; i++)
+                {
+                    var param = parameters[i];
+                    var parseMethod = GetParseMethod(param.Type);
+
+                    if (parseMethod is null)
+                    {
+                        parsedArgs.Append($"args[{i}]");
+                    }
+                    else if (parseMethod == "Boolean.Parse")
+                    {
+                        parsedArgs.Append($"{parseMethod}(args[{i}])");
+                    }
+                    else
+                    {
+                        parsedArgs.Append($"{parseMethod}(args[{i}], CultureInfo.InvariantCulture)");
+                    }
+
+                    if (i < parameters.Length - 1)
+                        parsedArgs.Append(", ");
+                }
+
+                sourceBuilder.AppendLine($"                {className}.{methodName}({parsedArgs});");
+            }
+            else
+            {
+                sourceBuilder.AppendLine($"                {className}.{methodName}();");
+            }
+
             sourceBuilder.AppendLine("                return;");
         }
 
@@ -109,5 +132,22 @@ public class MyActionDispatcherGenerator : IIncrementalGenerator
             """);
 
         context.AddSource("MyActionDispatcher.g.cs", SourceText.From(sourceBuilder.ToString(), Encoding.UTF8));
+    }
+
+    private static string? GetParseMethod(ITypeSymbol typeSymbol)
+    {
+        var type = typeSymbol.ToDisplayString();
+
+        return type switch
+        {
+            "int" or "System.Int32" => "Int32.Parse",
+            "float" or "System.Single" => "Single.Parse",
+            "double" or "System.Double" => "Double.Parse",
+            "decimal" or "System.Decimal" => "Decimal.Parse",
+            "System.DateTime" => "DateTime.Parse",
+            "bool" or "System.Boolean" => "Boolean.Parse",
+            "string" or "System.String" => null,
+            _ => throw new NotSupportedException($"Type {type} is not supported."),
+        };
     }
 }

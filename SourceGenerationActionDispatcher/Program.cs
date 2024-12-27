@@ -4,12 +4,7 @@ using ClassLibrary;
 
 var generatedDispatcher = new MyGeneratedActionDispatcher();
 
-generatedDispatcher.Dispatch("DoSomething"); // Output: DoSomething executed.
-generatedDispatcher.Dispatch("DoSomethingElse"); // Output: DoSomethingElse executed.
-
-var reflectionDispatcher = new MyReflectionActionDispatcher();
-
-reflectionDispatcher.Dispatch("DoSomething"); // Output: DoSomething executed.
-reflectionDispatcher.Dispatch("DoSomethingElse"); // Output: DoSomethingElse executed.
+generatedDispatcher.Dispatch("DoSomething", "Hello", "3"); // Output: Hello was repeated 3 times.
+generatedDispatcher.Dispatch("DoSomethingElse", "42.5");      // Output: Value is 42.5
 
 Console.ReadKey(); 
