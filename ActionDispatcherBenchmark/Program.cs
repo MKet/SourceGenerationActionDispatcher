@@ -80,7 +80,7 @@ namespace ActionDispatcherBenchmark
             {
                 string name = actionNames[random.Next(0, actionNames.Length)];
                 string[] parameters = testData[name];
-                generatedDispatcher.Dispatch(name, parameters);
+                var _ = generatedDispatcher.Dispatch(name, parameters);
             }
 
         }
@@ -93,7 +93,7 @@ namespace ActionDispatcherBenchmark
             {
                 string name = actionNames[random.Next(0, actionNames.Length)];
                 string[] parameters = testData[name];
-                reflectionDispatcher.Dispatch(name, parameters);
+                var _ = reflectionDispatcher.Dispatch(name, parameters);
             }
         }
     }

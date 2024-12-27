@@ -17,7 +17,7 @@ namespace ClassLibrary
                             .Where(m => m.GetCustomAttributes(typeof(MyActionAttribute), false).Length != 0).ToArray();
         }
 
-        public void Dispatch(string actionName, params string[] args)
+        public string Dispatch(string actionName, params string[] args)
         {
             var action = actions.FirstOrDefault(act => act.Name == actionName);
 
@@ -32,7 +32,7 @@ namespace ClassLibrary
 
 
                 var convertedParameters = parameters.Select((p, i) => ConvertValue(args[i], p.ParameterType)).ToArray();
-                action.Invoke(null, convertedParameters);
+                return action.Invoke(null, convertedParameters).ToString();
             }
             else
             {

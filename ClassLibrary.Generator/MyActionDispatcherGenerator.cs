@@ -17,7 +17,7 @@ public class MyActionDispatcherGenerator : IIncrementalGenerator
         // Create a provider for methods with the [MyAction] attribute
         var methodsWithMyAction = context.SyntaxProvider.ForAttributeWithMetadataName(
                 fullyQualifiedMetadataName: FullyQualifiedMetadataName,
-                predicate: static (node, _) => node is BaseMethodDeclarationSyntax method && method.Modifiers.Any(m => m.IsKind(SyntaxKind.StaticKeyword)),
+                predicate: static (node, _) => node is MethodDeclarationSyntax method && method.ReturnType.ToString() is "string" or "System.String" && method.Modifiers.Any(m => m.IsKind(SyntaxKind.StaticKeyword)),
                 transform: static (context, _) => GetMethodWithMyActionAttribute(context)
             )
             .Where(static method => method is not null)
@@ -75,7 +75,7 @@ public class MyActionDispatcherGenerator : IIncrementalGenerator
             */
             public class MyGeneratedActionDispatcher : IActionDispatcher
             {
-                public void Dispatch(string actionName, params string[] args)
+                public string Dispatch(string actionName, params string[] args)
                 {
                     switch (actionName)
                     {
@@ -113,14 +113,12 @@ public class MyActionDispatcherGenerator : IIncrementalGenerator
                         parsedArgs.Append(", ");
                 }
 
-                sourceBuilder.AppendLine($"                {className}.{methodName}({parsedArgs});");
+                sourceBuilder.AppendLine($"                return {className}.{methodName}({parsedArgs});");
             }
             else
             {
-                sourceBuilder.AppendLine($"                {className}.{methodName}();");
+                sourceBuilder.AppendLine($"                return {className}.{methodName}();");
             }
-
-            sourceBuilder.AppendLine("                return;");
         }
 
         sourceBuilder.Append("""
