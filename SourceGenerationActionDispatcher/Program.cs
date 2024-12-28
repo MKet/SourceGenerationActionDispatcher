@@ -30,11 +30,11 @@ Dictionary<string, string[]> testData = new()
             { "DateTime", new[] { "2024-12-31T23:59:59", "yyyy-MM-dd HH:mm:ss", "en-US" } }
         };
 
-var generatedDispatcher = new MyGeneratedActionDispatcher();
+var generatedDispatcher = new MyReflectionActionDispatcher();
 
 foreach (var pair in testData)
 {
-    Console.WriteLine(generatedDispatcher.Dispatch(pair.Key, pair.Value)); // Output: Hello was repeated 3 times
+    Console.WriteLine(generatedDispatcher.Dispatch(pair.Key, pair.Value));
 }
 
 Console.ReadKey(); 

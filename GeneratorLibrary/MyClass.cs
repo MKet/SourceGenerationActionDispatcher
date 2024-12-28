@@ -9,18 +9,6 @@ namespace ClassLibrary
     public static partial class MyClass
     {
 
-        [MyAction]
-        public static void DoSomething(string message = "Default", int count = 1)
-        {
-            Console.WriteLine($"{message} was repeated {count} times.");
-        }
-
-        [MyAction]
-        public static void DoSomethingElse(float value = 0f)
-        {
-            Console.WriteLine($"Value is {value}");
-        }
-
         /// <summary>
         /// This just returns the input as is. This can be used to bypass the default HtmlEncode formatter if needed.
         /// </summary>
@@ -146,10 +134,7 @@ namespace ClassLibrary
             var decimalSeparator = culture.NumberFormat.CurrencyDecimalSeparator;
             var outputParts = output.Split(decimalSeparator);
 
-            var stringBuilder = new StringBuilder();
-            stringBuilder.Append(outputParts[0]).Append($"{decimalSeparator}<sup>").Append(outputParts[1]).Append("</sup>");
-
-            return stringBuilder.ToString();
+            return $"{outputParts[0]}{decimalSeparator}<sup>{outputParts[1]}</sup>";
         }
 
         /// <summary>
@@ -212,8 +197,8 @@ namespace ClassLibrary
         [MyAction]
         public static string StripHtml(this string input)
         {
-            var tagRegex = new Regex("<(.|\\n)*?>", RegexOptions.Compiled | RegexOptions.IgnoreCase, TimeSpan.FromMilliseconds(2000));
-            var scriptRegex = MyRegex();
+            var tagRegex = TagRegex();
+            var scriptRegex = ScriptRegex();
             return tagRegex.Replace(scriptRegex.Replace(input, ""), "");
         }
 
@@ -325,7 +310,22 @@ namespace ClassLibrary
             return url;
         }
 
+        [MyAction]
+        public static string DoSomething(string message = "Default", int count = 1)
+        {
+            return $"{message} was repeated {count} times.";
+        }
+
+        [MyAction]
+        public static string DoSomethingElse(float value = 0f)
+        {
+            return $"Value is {value}";
+        }
+
         [GeneratedRegex("<script.*?/script>", RegexOptions.IgnoreCase | RegexOptions.Singleline, "en-NL")]
-        private static partial Regex MyRegex();
+        private static partial Regex ScriptRegex();
+
+        [GeneratedRegex("<(.|\\n)*?>", RegexOptions.IgnoreCase, "en-NL")]
+        private static partial Regex TagRegex();
     }
 }

@@ -1,43 +1,40 @@
-﻿using System.Reflection;
-using BenchmarkDotNet.Attributes;
-using BenchmarkDotNet.Engines;
+﻿using BenchmarkDotNet.Attributes;
 using BenchmarkDotNet.Running;
 using ClassLibrary;
+using System;
+using System.Collections.Generic;
+using System.Linq;
 
 namespace ActionDispatcherBenchmark
 {
-    [SimpleJob(RunStrategy.Throughput, iterationCount: 5)]
+    [MemoryDiagnoser]
     public class GeneratedVsReflection
     {
-        private const int iterationCount = 100_000_000;
-        private readonly string[] actionNames = 
-            [
-                "Raw", 
-                "HtmlEncode", 
-                "UrlEncode", 
-                "UrlDecode", 
-                "CutString",
-                "JsonSafe",
-                "StripHtml",
-                "StripInlineStyle",
-                "Base64",
-                "UppercaseFirst",
-                "LowercaseFirst",
-                "Uppercase",
-                "Lowercase",
-                "Replace",
-                "QrCode",
-                "FormatNumber",
-                "Currency",
-                "CurrencySup",
-                "DateTime"
-            ];
-
-        private readonly Random random;
+        private readonly string[] actionNames =
+        {
+            "Raw",
+            "HtmlEncode",
+            "UrlEncode",
+            "UrlDecode",
+            "CutString",
+            "JsonSafe",
+            "StripHtml",
+            "StripInlineStyle",
+            "Base64",
+            "UppercaseFirst",
+            "LowercaseFirst",
+            "Uppercase",
+            "Lowercase",
+            "Replace",
+            "QrCode",
+            "FormatNumber",
+            "Currency",
+            "CurrencySup",
+            "DateTime"
+        };
 
         private readonly Dictionary<string, string[]> testData = new()
         {
-            // Methods with string inputs
             { "Raw", new[] { "SampleInput" } },
             { "HtmlEncode", new[] { "<div>Hello & welcome!</div>" } },
             { "UrlEncode", new[] { "https://example.com/test?query=value" } },
@@ -53,48 +50,53 @@ namespace ActionDispatcherBenchmark
             { "Lowercase", new[] { "TO LOWERCASE", "true" } },
             { "Replace", new[] { "Hello, world!", "world", "C#" } },
             { "QrCode", new[] { "https://example.com", "150", "150" } },
-
-            // Methods with numeric inputs
             { "FormatNumber", new[] { "12345.6789", "N3", "en-US" } },
             { "Currency", new[] { "1234.56", "true", "en-GB" } },
             { "CurrencySup", new[] { "9876.54", "false", "nl-NL" } },
-
-            // Methods with DateTime inputs
             { "DateTime", new[] { "2024-12-31T23:59:59", "yyyy-MM-dd HH:mm:ss", "en-US" } }
         };
 
         private MyGeneratedActionDispatcher? generatedDispatcher;
         private MyReflectionActionDispatcher? reflectionDispatcher;
+        private List<(string ActionName, string[] Parameters)>? randomizedCalls;
 
-        public GeneratedVsReflection()
-        {
-            random = new Random(42);
-
-        }
-
-        [Benchmark]
-        public void Generated()
+        [GlobalSetup]
+        public void Setup()
         {
             generatedDispatcher = new MyGeneratedActionDispatcher();
-            for (int i = 0; i < iterationCount; i++)
-            {
-                string name = actionNames[random.Next(0, actionNames.Length)];
-                string[] parameters = testData[name];
-                var _ = generatedDispatcher.Dispatch(name, parameters);
-            }
+            reflectionDispatcher = new MyReflectionActionDispatcher();
 
+            var random = new Random(42);
+            randomizedCalls = Enumerable.Range(0, 1000)
+                .Select(_ =>
+                {
+                    var actionName = actionNames[random.Next(actionNames.Length)];
+                    var parameters = testData[actionName];
+                    return (actionName, parameters);
+                })
+                .ToList();
         }
 
         [Benchmark]
-        public void Reflection()
+        public string Generated()
         {
-            reflectionDispatcher = new MyReflectionActionDispatcher();
-            for (int i = 0; i < iterationCount; i++)
+            string result = string.Empty;
+            foreach (var (actionName, parameters) in randomizedCalls!)
             {
-                string name = actionNames[random.Next(0, actionNames.Length)];
-                string[] parameters = testData[name];
-                var _ = reflectionDispatcher.Dispatch(name, parameters);
+                result = generatedDispatcher!.Dispatch(actionName, parameters);
             }
+            return result;
+        }
+
+        [Benchmark]
+        public string Reflection()
+        {
+            string result = string.Empty;
+            foreach (var (actionName, parameters) in randomizedCalls!)
+            {
+                result = reflectionDispatcher!.Dispatch(actionName, parameters);
+            }
+            return result;
         }
     }
 
@@ -102,7 +104,7 @@ namespace ActionDispatcherBenchmark
     {
         public static void Main()
         {
-            _ = BenchmarkRunner.Run<GeneratedVsReflection>();
+            BenchmarkRunner.Run<GeneratedVsReflection>();
         }
     }
 }
