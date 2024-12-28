@@ -117,7 +117,7 @@ public class MyActionDispatcherGenerator : IIncrementalGenerator
 
 
             builder.AppendLine("""
-                default:
+                        default:
                         {
                             throw new ArgumentException($"No action found for: {actionName}");
                         }
