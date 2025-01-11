@@ -17,28 +17,40 @@ namespace ClassLibrary
                         .ToDictionary(m => m.Name);
         }
 
-        public string Dispatch(string actionName, params string[] args)
+        public string Dispatch(string actionName, Dictionary<string, string> args)
         {
             if (!actions.TryGetValue(actionName, out var action))
                 throw new ArgumentException($"No action found for: {actionName}");
 
             var parameters = action.GetParameters();
-            if (parameters.Length != args.Length)
-                throw new ArgumentException($"Expected {parameters.Length} arguments for {actionName}, but got {args.Length}.");
+            if (parameters.Length != args.Count)
+                throw new ArgumentException($"Expected {parameters.Length} arguments for {actionName}, but got {args.Count}.");
 
             var convertedParameters = ConvertParameters(args, parameters);
             return action.Invoke(null, convertedParameters)?.ToString();
         }
 
 
-        private static object[] ConvertParameters(string[] args, ParameterInfo[] parameters)
+        private static object[] ConvertParameters(Dictionary<string, string> args, ParameterInfo[] parameters)
         {
             var converted = new object[parameters.Length];
 
             for (int i = 0; i < parameters.Length; i++)
             {
-                var parameterType = parameters[i].ParameterType;
-                converted[i] = ConvertValue(args[i], parameterType);
+                var parameter = parameters[i];
+
+                if (args.TryGetValue(parameter.Name, out var value)) 
+                {
+                    converted[i] = ConvertValue(value, parameter.ParameterType);
+                } 
+                else if (parameter.HasDefaultValue)
+                {
+                    converted[i] = parameter.DefaultValue;
+                } 
+                else
+                {
+                    throw new ArgumentException($"Missing required argument: {parameter.Name}");
+                }
             }
 
             return converted;

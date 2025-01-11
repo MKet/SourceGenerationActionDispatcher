@@ -3,6 +3,7 @@ using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.CodeAnalysis.Text;
 using System.Collections.Immutable;
+using System.Reflection;
 using System.Text;
 
 namespace ClassLibrary.Generator;
@@ -58,9 +59,12 @@ public class MyActionDispatcherGenerator : IIncrementalGenerator
 
     private static void AppendHeader(StringBuilder builder)
     {
+        string version = Assembly.GetExecutingAssembly().GetName().Version.ToString();
         builder.AppendLine("""
             using System;
+            using System.Collections.Generic;
             using System.Globalization;
+            using System.CodeDom.Compiler;
 
             namespace ClassLibrary;
 
@@ -70,6 +74,9 @@ public class MyActionDispatcherGenerator : IIncrementalGenerator
             Please DO NOT modify it manually!
             ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
             */
+            """);
+        builder.AppendLine($"[GeneratedCodeAttribute(\"ClassLibrary.Generator.MyActionDispatcherGenerator\", \"{version}\")]");
+        builder.AppendLine("""    
             public class MyGeneratedActionDispatcher : IActionDispatcher
             {
             """);
@@ -78,7 +85,7 @@ public class MyActionDispatcherGenerator : IIncrementalGenerator
     private static void AppendDispatchMethod(StringBuilder builder, (string? ClassName, string? MethodName, ImmutableArray<IParameterSymbol> Parameters)[] methods)
     {
         builder.AppendLine("""
-            public string Dispatch(string actionName, params string[] args)
+            public string Dispatch(string actionName, Dictionary<string, string> args)
             {
         """);
 
@@ -97,24 +104,16 @@ public class MyActionDispatcherGenerator : IIncrementalGenerator
             {
                 builder.AppendLine($"            case \"{methodName}\":");
                 builder.AppendLine("            {");
-                builder.AppendLine($"                if (args.Length != {parameters.Length})");
-                builder.AppendLine("                {");
-                builder.AppendLine($"                    throw new ArgumentException($\"Expected {parameters.Length} arguments for {methodName}, but got {{args.Length}}.\");");
-                builder.AppendLine("                }");
 
                 if (parameters.Length > 0)
                 {
                     var parsedArgs = BuildArgumentParsing(parameters);
-                    builder.AppendLine($"                return {className}.{methodName}({parsedArgs});");
-                }
-                else
-                {
-                    builder.AppendLine($"                return {className}.{methodName}();");
+                    builder.AppendLine(parsedArgs);
                 }
 
+                builder.AppendLine($"                return {className}.{methodName}({BuildArgumentNames(parameters)});");
                 builder.AppendLine("            }");
             }
-
 
             builder.AppendLine("""
                         default:
@@ -129,48 +128,83 @@ public class MyActionDispatcherGenerator : IIncrementalGenerator
     private static string BuildArgumentParsing(ImmutableArray<IParameterSymbol> parameters)
     {
         var parsedArgs = new StringBuilder();
-        for (int i = 0; i < parameters.Length; i++)
-        {
-            var parameter = parameters[i];
-            var parseMethod = GetParseMethod(parameter.Type);
 
-            if (parseMethod == null)
+        foreach (var parameter in parameters)
+        {
+            var paramName = parameter.Name;
+            var parseMethod = GetParseMethod(parameter.Type, parameter.NullableAnnotation == NullableAnnotation.Annotated);
+            var defaultValue = parameter.HasExplicitDefaultValue
+                ? GetDefaultValueLiteral(parameter)
+                : "default";
+
+            if (parameter.IsOptional)
             {
-                parsedArgs.Append($"args[{i}]");
-            }
-            else if (parseMethod == "Boolean.Parse")
-            {
-                parsedArgs.Append($"{parseMethod}(args[{i}])");
+                parsedArgs.AppendLine($"""
+                                    var arg_{paramName} = args.TryGetValue("{paramName}", out var value_{paramName}) && !string.IsNullOrWhiteSpace(value_{paramName})
+                                        ? {parseMethod}(value_{paramName})
+                                        : {defaultValue};
+                    """);
             }
             else
             {
-                parsedArgs.Append($"{parseMethod}(args[{i}], CultureInfo.InvariantCulture)");
-            }
-
-            if (i < parameters.Length - 1)
-            {
-                parsedArgs.Append(", ");
+                parsedArgs.AppendLine($"""
+                                    if (!args.TryGetValue("{paramName}", out var value_{paramName}) || string.IsNullOrWhiteSpace(value_{paramName}))
+                                        throw new ArgumentException("Missing required argument: {paramName}");
+                                    var arg_{paramName} = {parseMethod}(value_{paramName});
+                    """);
             }
         }
 
         return parsedArgs.ToString();
     }
 
-    private static string? GetParseMethod(ITypeSymbol typeSymbol)
+    private static string BuildArgumentNames(ImmutableArray<IParameterSymbol> parameters)
+    {
+        var argumentNames = new StringBuilder();
+
+        for (int i = 0; i < parameters.Length; i++)
+        {
+            var parameter = parameters[i];
+            argumentNames.Append($"arg_{parameter.Name}");
+            if (i < parameters.Length - 1)
+            {
+                argumentNames.Append(", ");
+            }
+        }
+
+        return argumentNames.ToString();
+    }
+
+    private static string? GetParseMethod(ITypeSymbol typeSymbol, bool isNullable)
     {
         var typeName = typeSymbol.ToDisplayString();
 
         return typeName switch
         {
-            "int" or "System.Int32" => "Int32.Parse",
-            "float" or "System.Single" => "Single.Parse",
-            "double" or "System.Double" => "Double.Parse",
-            "decimal" or "System.Decimal" => "Decimal.Parse",
+            "int" or "System.Int32" => isNullable ? "(string s) => String.IsNullOrWhiteSpace(s) ? (int?)null : Int32.Parse(s)" : "Int32.Parse",
+            "float" or "System.Single" => isNullable ? "(string s) => String.IsNullOrWhiteSpace(s) ? (float?)null : Single.Parse(s)" : "Single.Parse",
+            "double" or "System.Double" => isNullable ? "(string s) => String.IsNullOrWhiteSpace(s) ? (double?)null : Double.Parse(s)" : "Double.Parse",
+            "decimal" or "System.Decimal" => isNullable ? "(string s) => String.IsNullOrWhiteSpace(s) ? (decimal?)null : Decimal.Parse(s)" : "Decimal.Parse",
             "bool" or "System.Boolean" => "Boolean.Parse",
-            "System.DateTime" => "DateTime.Parse",
-            "string" or "System.String" => null,
+            "System.DateTime" => isNullable ? "(string s) => String.IsNullOrWhiteSpace(s) ? (DateTime?)null : DateTime.Parse(s)" : "DateTime.Parse",
+            "string" or "System.String" => String.Empty,
             _ => throw new NotSupportedException($"Type '{typeName}' is not supported."),
         };
+    }
+
+    private static string GetDefaultValueLiteral(IParameterSymbol parameter)
+    {
+        if (parameter.HasExplicitDefaultValue)
+        {
+            return parameter.ExplicitDefaultValue switch
+            {
+                null => "null",
+                string s => $"\"{s}\"",
+                _ => parameter.ExplicitDefaultValue.ToString() ?? "default"
+            };
+        }
+
+        return "default";
     }
 
     private static void AppendFooter(StringBuilder builder)
