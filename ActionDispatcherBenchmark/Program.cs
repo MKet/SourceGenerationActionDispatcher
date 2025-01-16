@@ -33,7 +33,7 @@ namespace ActionDispatcherBenchmark
             "DateTime"
         };
 
-        private readonly new Dictionary<string, Dictionary<string, string>> testData = new Dictionary<string, Dictionary<string, string>>
+        private readonly Dictionary<string, Dictionary<string, string>> testData = new Dictionary<string, Dictionary<string, string>>
         {
             // Methods with string inputs
             { "Raw", new Dictionary<string, string> { { "input", "SampleInput" } } },
@@ -120,9 +120,9 @@ namespace ActionDispatcherBenchmark
             }
         };
 
-        private readonly int N ;
         private MyGeneratedActionDispatcher? generatedDispatcher;
         private MyReflectionActionDispatcher? reflectionDispatcher;
+        private MyExpressionTreeActionDispatcher? expressionTreeDispatcher;
         private List<(string ActionName, Dictionary<string, string> Parameters)>? randomizedCalls;
 
         [GlobalSetup]
@@ -130,6 +130,7 @@ namespace ActionDispatcherBenchmark
         {
             generatedDispatcher = new MyGeneratedActionDispatcher();
             reflectionDispatcher = new MyReflectionActionDispatcher();
+            expressionTreeDispatcher = new MyExpressionTreeActionDispatcher();
 
             var random = new Random(42);
             randomizedCalls = Enumerable.Range(0, 1000)
@@ -149,6 +150,17 @@ namespace ActionDispatcherBenchmark
             foreach (var (actionName, parameters) in randomizedCalls!)
             {
                 result = generatedDispatcher!.Dispatch(actionName, parameters);
+            }
+            return result;
+        }
+
+        [Benchmark]
+        public string ExpressionTree()
+        {
+            string result = string.Empty;
+            foreach (var (actionName, parameters) in randomizedCalls!)
+            {
+                result = expressionTreeDispatcher!.Dispatch(actionName, parameters);
             }
             return result;
         }

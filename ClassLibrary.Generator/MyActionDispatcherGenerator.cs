@@ -140,15 +140,15 @@ public class MyActionDispatcherGenerator : IIncrementalGenerator
             if (parameter.IsOptional)
             {
                 parsedArgs.AppendLine($"""
-                                    var arg_{paramName} = args.TryGetValue("{paramName}", out var value_{paramName}) && !string.IsNullOrWhiteSpace(value_{paramName})
+                                    var arg_{paramName} = args.TryGetValue("{paramName}", out var value_{paramName}) && !String.IsNullOrWhiteSpace(value_{paramName})
                                         ? {parseMethod}(value_{paramName})
-                                        : {defaultValue};
+                                        : {defaultValue.ToLowerInvariant()};
                     """);
             }
             else
             {
                 parsedArgs.AppendLine($"""
-                                    if (!args.TryGetValue("{paramName}", out var value_{paramName}) || string.IsNullOrWhiteSpace(value_{paramName}))
+                                    if (!args.TryGetValue("{paramName}", out var value_{paramName}) || String.IsNullOrWhiteSpace(value_{paramName}))
                                         throw new ArgumentException("Missing required argument: {paramName}");
                                     var arg_{paramName} = {parseMethod}(value_{paramName});
                     """);
@@ -200,6 +200,7 @@ public class MyActionDispatcherGenerator : IIncrementalGenerator
             {
                 null => "null",
                 string s => $"\"{s}\"",
+                bool b => b ? "true" : "false",
                 _ => parameter.ExplicitDefaultValue.ToString() ?? "default"
             };
         }

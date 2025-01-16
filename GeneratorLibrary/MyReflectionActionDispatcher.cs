@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Frozen;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
@@ -8,13 +9,13 @@ namespace ClassLibrary
 {
     public class MyReflectionActionDispatcher : IActionDispatcher
     {
-        private readonly Dictionary<string, MethodInfo> actions;
+        private readonly FrozenDictionary<string, MethodInfo> actions;
 
         public MyReflectionActionDispatcher()
         {
             actions = typeof(MyClass).GetMethods(BindingFlags.Static | BindingFlags.Public)
                         .Where(m => m.GetCustomAttributes(typeof(MyActionAttribute), false).Length != 0)
-                        .ToDictionary(m => m.Name);
+                        .ToFrozenDictionary(m => m.Name);
         }
 
         public string Dispatch(string actionName, Dictionary<string, string> args)
